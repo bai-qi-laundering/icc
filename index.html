@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>800-3 輪燙機紀錄系統</title>
+  
+  <!-- 載入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 載入 React 相關核心 -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- 載入 html2canvas 用於產生截圖 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased font-sans">
+  
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // --- 圖示元件 (取代外部圖示庫，確保單一檔案完美運行) ---
+    const Icon = ({ name, size = 20, className = '' }) => {
+      const icons = {
+        Clock: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+        Save: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
+        Trash2: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
+        FileSpreadsheet: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></svg>,
+        PlusCircle: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>,
+        Edit: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+        X: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+        ImageIcon: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
+        Loader2: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+        CalendarDays: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg>,
+        Cloud: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>,
+        Settings: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+        CloudOff: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 15h9a5 5 0 0 0 1.7-.3"/><line x1="1" y1="1" x2="23" y2="23"/></svg>,
+        RefreshCw: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      };
+      return <div className={`inline-block ${className}`}>{icons[name]}</div>;
+    };
+
+    // --- 工具函數 ---
+    const getLocalISODate = (dateObj = new Date()) => {
+      const yyyy = dateObj.getFullYear();
+      const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const dd = String(dateObj.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const formatDateForDisplay = (isoString) => {
+      if (!isoString) return '';
+      const parts = isoString.split('-');
+      if (parts.length !== 3) return isoString;
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      const dateObj = new Date(isoString);
+      const dayOfWeek = ['日', '一', '二', '三', '四', '五', '六'][dateObj.getDay()];
+      return `${month}/${day}(週${dayOfWeek})`;
+    };
+
+    const getCurrentTimeString = () => {
+      const now = new Date();
+      return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    };
+
+    // --- 主程式 App ---
+    function App() {
+      const tableRef = useRef(null);
+      
+      const [appConfig, setAppConfig] = useState(() => {
+        try {
+          const saved = localStorage.getItem('machineAppConfig');
+          return saved ? JSON.parse(saved) : { mode: 'local', apiUrl: '' };
+        } catch (e) {
+          return { mode: 'local', apiUrl: '' };
+        }
+      });
+      
+      const [showSettings, setShowSettings] = useState(false);
+      const [tempUrl, setTempUrl] = useState(appConfig.apiUrl);
+
+      const [records, setRecords] = useState([]);
+      const [isLoading, setIsLoading] = useState(false);
+      const [isGenerating, setIsGenerating] = useState(false);
+      const [toastMessage, setToastMessage] = useState('');
+
+      const defaultForm = { date: getLocalISODate(), flatQty: '', pillowQty: '', onTime: '', offTime: '', sign1: '', sign2: '' };
+      const [formData, setFormData] = useState(defaultForm);
+      const [editingId, setEditingId] = useState(null);
+
+      const currentMonthPrefix = getLocalISODate().substring(0, 7);
+      const currentDisplayMonth = new Date().getMonth() + 1;
+
+      useEffect(() => {
+        localStorage.setItem('machineAppConfig', JSON.stringify(appConfig));
+        if (appConfig.mode === 'local') {
+           loadLocalRecords();
+        } else {
+           fetchCloudRecords();
+        }
+      }, [appConfig]);
+
+      const showToast = (msg) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(''), 3000);
+      };
+
+      const loadLocalRecords = () => {
+        try {
+          const saved = localStorage.getItem('machineRecords_local');
+          if (saved) setRecords(JSON.parse(saved));
+          else setRecords([]);
+        } catch (e) {}
+      };
+
+      const saveLocalRecords = (newRecords) => {
+        localStorage.setItem('machineRecords_local', JSON.stringify(newRecords));
+        setRecords(newRecords);
+      };
+
+      const fetchCloudRecords = async () => {
+        if (!appConfig.apiUrl) return;
+        setIsLoading(true);
+        try {
+          const response = await fetch(appConfig.apiUrl);
+          const data = await response.json();
+          setRecords(data || []);
+          showToast("已從試算表同步資料");
+        } catch (error) {
+          console.error("Fetch Error:", error);
+          showToast("連線試算表失敗，請檢查網址");
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      const sendToCloud = async (action, payload) => {
+        if (!appConfig.apiUrl) return false;
+        setIsLoading(true);
+        try {
+          await fetch(appConfig.apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: action, ...payload })
+          });
+          await fetchCloudRecords();
+          return true;
+        } catch (error) {
+          console.error("Post Error:", error);
+          showToast("儲存到雲端失敗，請重試");
+          return false;
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+      };
+
+      const setTimeNow = (field) => {
+        setFormData(prev => ({ ...prev, [field]: getCurrentTimeString() }));
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!formData.date) {
+          showToast("請選擇日期！");
+          return;
+        }
+
+        if (appConfig.mode === 'api') {
+          if (editingId) {
+            const success = await sendToCloud('update', { record: { ...formData, id: editingId } });
+            if(success) {
+               setEditingId(null);
+               setFormData({ ...defaultForm, date: getLocalISODate() });
+               showToast("雲端紀錄已更新");
+            }
+          } else {
+            const success = await sendToCloud('create', { record: { ...formData, id: Date.now().toString() } });
+            if(success) {
+               setFormData({ ...defaultForm, date: getLocalISODate() });
+               showToast("已儲存至試算表");
+            }
+          }
+        } else {
+          if (editingId) {
+            const updated = records.map(r => r.id === editingId ? { ...formData, id: editingId } : r);
+            saveLocalRecords(updated);
+            setEditingId(null);
+          } else {
+            saveLocalRecords([...records, { ...formData, id: Date.now().toString() }]);
+          }
+          setFormData({ ...defaultForm, date: getLocalISODate() });
+          showToast("紀錄已儲存在本機");
+        }
+      };
+
+      const handleEdit = (record) => {
+        setFormData(record);
+        setEditingId(record.id);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const handleCancelEdit = () => {
+        setFormData({ ...defaultForm, date: getLocalISODate() });
+        setEditingId(null);
+      };
+
+      const handleDelete = async (id) => {
+        if(window.confirm('確定要刪除這筆紀錄嗎？')) {
+          if (appConfig.mode === 'api') {
+            const success = await sendToCloud('delete', { id: id });
+            if(success) showToast("已從試算表刪除");
+          } else {
+            saveLocalRecords(records.filter(record => record.id !== id));
+            showToast("本機紀錄已刪除");
+          }
+        }
+      };
+
+      const handleShareImage = async () => {
+        if (sortedCurrentMonthRecords.length === 0) {
+          showToast("當月沒有資料可以分享喔"); return;
+        }
+        if (!window.html2canvas) {
+          showToast("截圖模組載入中，請稍候"); return;
+        }
+        if (!tableRef.current) return;
+
+        setIsGenerating(true);
+        showToast("正在產生完美表格截圖...");
+
+        try {
+          const canvas = await window.html2canvas(tableRef.current, {
+            backgroundColor: "#ffffff",
+            scale: 2, 
+            useCORS: true,
+            onclone: (clonedDocument) => {
+              const outer = clonedDocument.querySelector('[data-screenshot-outer="true"]');
+              const scroll = clonedDocument.querySelector('[data-screenshot-scroll="true"]');
+              if (outer) { outer.style.width = 'max-content'; outer.style.minWidth = '100%'; }
+              if (scroll) { scroll.style.overflow = 'visible'; }
+            }
+          });
+
+          canvas.toBlob(async (blob) => {
+            if (!blob) throw new Error("Canvas is empty");
+            const fileName = `輪燙機_${currentDisplayMonth}月.png`;
+            const file = new File([blob], fileName, { type: 'image/png' });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+              try {
+                await navigator.share({
+                  files: [file],
+                  title: `800-3 輪燙機紀錄表`,
+                  text: `傳送 ${currentDisplayMonth}月份 紀錄表`
+                });
+                showToast("準備分享！");
+              } catch (err) {}
+            } else {
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = fileName;
+              a.click();
+              URL.revokeObjectURL(url);
+              showToast("圖片已下載");
+            }
+            setIsGenerating(false);
+          }, 'image/png');
+
+        } catch (error) {
+          console.error(error);
+          showToast("產生圖片失敗，請重試");
+          setIsGenerating(false);
+        }
+      };
+
+      const sortedCurrentMonthRecords = records
+        .filter(record => record.date.startsWith(currentMonthPrefix))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      return (
+        <div className="min-h-screen p-2 md:p-4 pb-20 relative">
+          
+          {/* Toast */}
+          {toastMessage && (
+            <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 transition-all">
+              {isLoading || isGenerating ? <Icon name="Loader2" className="animate-spin" size={18} /> : <Icon name="Save" size={18} />}
+              {toastMessage}
+            </div>
+          )}
+
+          {/* Settings Modal */}
+          {showSettings && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Icon name="Cloud" size={24} className="text-blue-500" />
+                  雲端試算表連線設定
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Google Apps Script 網址 (URL)</label>
+                    <input 
+                      type="text" 
+                      value={tempUrl}
+                      onChange={(e) => setTempUrl(e.target.value)}
+                      className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                      placeholder="https://script.google.com/macros/s/.../exec"
+                    />
+                    <p className="text-xs text-slate-500 mt-2">
+                      請將您在 Google 部署 Web App 所取得的網址貼在此處。
+                    </p>
+                  </div>
+                  <div className="flex gap-2 pt-4">
+                    <button 
+                      onClick={() => {
+                        setAppConfig({ mode: 'api', apiUrl: tempUrl });
+                        setShowSettings(false);
+                      }}
+                      className="flex-1 bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      連線到試算表
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setAppConfig({ mode: 'local', apiUrl: '' });
+                        setShowSettings(false);
+                      }}
+                      className="flex-1 bg-slate-200 text-slate-700 font-bold py-2 rounded-lg hover:bg-slate-300 transition-colors"
+                    >
+                      切換回本機測試
+                    </button>
+                  </div>
+                </div>
+                <button onClick={() => setShowSettings(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+                  <Icon name="X" size={24} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
+            
+            {/* Header */}
+            <header className="bg-white p-4 md:p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-lg ${appConfig.mode === 'api' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                  <Icon name="FileSpreadsheet" size={32} />
+                </div>
+                <div>
+                  <h1 className="text-xl md:text-2xl font-bold text-slate-800">800-3 輪燙機日誌</h1>
+                  <div className="flex items-center gap-2 mt-1">
+                    {appConfig.mode === 'api' ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700">
+                        <Icon name="Cloud" size={12} /> 雲端連線中
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-600">
+                        <Icon name="CloudOff" size={12} /> 本機模式
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                {appConfig.mode === 'api' && (
+                   <button 
+                     onClick={fetchCloudRecords}
+                     disabled={isLoading}
+                     className="flex items-center justify-center gap-1 bg-blue-50 text-blue-600 px-3 py-2.5 rounded-lg font-bold hover:bg-blue-100 transition-all disabled:opacity-50"
+                   >
+                     <Icon name="RefreshCw" size={18} className={isLoading ? 'animate-spin' : ''} />
+                     同步
+                   </button>
+                )}
+                <button 
+                  onClick={() => setShowSettings(true)}
+                  className="flex items-center justify-center gap-1 bg-slate-100 text-slate-700 px-3 py-2.5 rounded-lg font-bold hover:bg-slate-200 transition-all"
+                >
+                  <Icon name="Settings" size={18} /> 設定
+                </button>
+                <button 
+                  onClick={handleShareImage}
+                  disabled={isGenerating}
+                  className="flex items-center justify-center gap-2 bg-[#06C755] text-white px-4 py-2.5 rounded-lg font-bold hover:bg-[#05b34c] shadow-md transition-all active:scale-95 disabled:opacity-70"
+                >
+                  {isGenerating ? <Icon name="Loader2" className="animate-spin" size={18} /> : <Icon name="ImageIcon" size={18} />}
+                  分享報表
+                </button>
+              </div>
+            </header>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+              
+              {/* Form Sidebar */}
+              <div className="lg:col-span-1 bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200 border-t-4 border-t-blue-500 relative">
+                {isLoading && (
+                  <div className="absolute inset-0 bg-white/60 z-10 flex items-center justify-center rounded-xl">
+                     <Icon name="Loader2" className="animate-spin text-blue-500" size={32} />
+                  </div>
+                )}
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-bold flex items-center gap-2 text-blue-800">
+                    {editingId ? <Icon name="Edit" size={20} /> : <Icon name="PlusCircle" size={20} />}
+                    {editingId ? '修改紀錄' : '新增紀錄'}
+                  </h2>
+                  {editingId && (
+                    <button onClick={handleCancelEdit} className="text-slate-400 hover:text-slate-600 flex items-center gap-1 text-sm bg-slate-100 px-2 py-1 rounded">
+                      <Icon name="X" size={14} /> 取消
+                    </button>
+                  )}
+                </div>
+                
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">
+                      <Icon name="CalendarDays" size={16} className="text-blue-500"/> 選擇日期 (Date)
+                    </label>
+                    <input 
+                      type="date" name="date" value={formData.date} onChange={handleInputChange}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="p-3 bg-blue-50/50 rounded-lg space-y-3 border border-blue-100">
+                    <div>
+                      <label className="block text-sm font-medium text-blue-900 mb-1">開機時間 (mở máy)</label>
+                      <div className="flex gap-2">
+                        <input type="time" name="onTime" value={formData.onTime} onChange={handleInputChange} className="flex-1 p-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                        <button type="button" onClick={() => setTimeNow('onTime')} className="px-3 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-1"><Icon name="Clock" size={16} /> 現在</button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-blue-900 mb-1">關機時間 (tắt máy)</label>
+                      <div className="flex gap-2">
+                        <input type="time" name="offTime" value={formData.offTime} onChange={handleInputChange} className="flex-1 p-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                        <button type="button" onClick={() => setTimeNow('offTime')} className="px-3 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-1"><Icon name="Clock" size={16} /> 現在</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">平面數量</label>
+                      <input type="text" name="flatQty" value={formData.flatQty} onChange={handleInputChange} className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="數量" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">枕套數量</label>
+                      <input type="text" name="pillowQty" value={formData.pillowQty} onChange={handleInputChange} className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="數量" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">撿套簽名</label>
+                      <input type="text" name="sign1" value={formData.sign1} onChange={handleInputChange} className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="姓名" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">放套簽名</label>
+                      <input type="text" name="sign2" value={formData.sign2} onChange={handleInputChange} className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="姓名" />
+                    </div>
+                  </div>
+
+                  <button type="submit" disabled={isLoading} className={`w-full mt-4 text-white font-bold p-3.5 rounded-lg shadow-sm transition-colors flex justify-center items-center gap-2 ${editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'} disabled:opacity-50`}>
+                    <Icon name="Save" size={20} />
+                    {editingId ? '更新紀錄' : (appConfig.mode === 'api' ? '儲存至雲端' : '儲存紀錄')}
+                  </button>
+                </form>
+              </div>
+
+              {/* Table Data */}
+              <div className="lg:col-span-2 relative">
+                 {isLoading && (
+                  <div className="absolute inset-0 bg-white/40 z-10 flex items-center justify-center rounded-xl"></div>
+                )}
+                <div ref={tableRef} data-screenshot-outer="true" className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col w-full">
+                  <div className="p-4 md:p-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                    <div>
+                      <h2 className="text-xl font-extrabold text-slate-800">
+                        800-3 輪燙機 {currentDisplayMonth}月份紀錄
+                      </h2>
+                    </div>
+                    <div className="text-sm px-3 py-1 bg-blue-100 text-blue-800 font-bold rounded-lg">
+                      共 {sortedCurrentMonthRecords.length} 筆
+                    </div>
+                  </div>
+                  
+                  <div data-screenshot-scroll="true" className="overflow-x-auto flex-1 p-2 md:p-4 min-h-[300px]">
+                    <table className="w-full text-base text-left min-w-[500px]">
+                      <thead className="text-slate-500 border-b-2 border-slate-200">
+                        <tr>
+                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700">日期</th>
+                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700">時間(開/關)</th>
+                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700">數量(平/枕)</th>
+                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700">簽名(撿/放)</th>
+                          <th data-html2canvas-ignore="true" className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-center text-slate-700">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {sortedCurrentMonthRecords.map((record) => (
+                          <tr key={record.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-2 md:px-4 py-4 whitespace-nowrap font-bold text-slate-800 text-lg">
+                              {formatDateForDisplay(record.date)}
+                            </td>
+                            <td className="px-2 md:px-4 py-4 whitespace-nowrap">
+                              <div className="text-blue-600 font-bold mb-1">開: {record.onTime || '--:--'}</div>
+                              <div className="text-red-600 font-bold">關: {record.offTime || '--:--'}</div>
+                            </td>
+                            <td className="px-2 md:px-4 py-4 whitespace-nowrap">
+                              <div className="text-slate-700 mb-1">平: <span className="font-bold">{record.flatQty || '0'}</span></div>
+                              <div className="text-slate-700">枕: <span className="font-bold">{record.pillowQty || '0'}</span></div>
+                            </td>
+                            <td className="px-2 md:px-4 py-4 whitespace-nowrap">
+                              <div className="text-slate-700 mb-1">撿: <span className="font-medium">{record.sign1 || '-'}</span></div>
+                              <div className="text-slate-700">放: <span className="font-medium">{record.sign2 || '-'}</span></div>
+                            </td>
+                            <td data-html2canvas-ignore="true" className="px-2 md:px-4 py-4 whitespace-nowrap text-center">
+                              <div className="flex justify-center gap-2">
+                                <button onClick={() => handleEdit(record)} disabled={isLoading} className="text-blue-500 hover:bg-blue-100 p-2 rounded transition-colors disabled:opacity-50"><Icon name="Edit" size={20} /></button>
+                                <button onClick={() => handleDelete(record.id)} disabled={isLoading} className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-2 rounded transition-colors disabled:opacity-50"><Icon name="Trash2" size={20} /></button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {sortedCurrentMonthRecords.length === 0 && (
+                          <tr>
+                            <td colSpan="5" className="px-4 py-12 text-center text-slate-500 text-lg">
+                              {appConfig.mode === 'api' ? '雲端資料庫目前尚無本月紀錄' : '本月目前還沒有紀錄資料'}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="px-4 py-2 text-right text-xs text-slate-300 font-medium bg-white">
+                    {appConfig.mode === 'api' ? 'Synced with Google Sheets' : 'Generated by Digital Factory System'}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 將 App 渲染到畫面上
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

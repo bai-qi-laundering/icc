@@ -35,7 +35,8 @@
         Cloud: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>,
         Settings: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
         CloudOff: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 15h9a5 5 0 0 0 1.7-.3"/><line x1="1" y1="1" x2="23" y2="23"/></svg>,
-        RefreshCw: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        RefreshCw: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>,
+        PenTool: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
       };
       return <div className={`inline-block ${className}`}>{icons[name]}</div>;
     };
@@ -63,6 +64,151 @@
       return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     };
 
+    // ★ 新增簽名板元件
+    const SignaturePad = ({ onSave, onCancel, initialSignature }) => {
+      const canvasRef = useRef(null);
+      const [isDrawing, setIsDrawing] = useState(false);
+
+      useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        
+        // 設定高解析度畫布以獲得平滑的線條
+        const ctx = canvas.getContext('2d');
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = canvas.offsetWidth * ratio;
+        canvas.height = canvas.offsetHeight * ratio;
+        ctx.scale(ratio, ratio);
+        
+        // 預設白色背景 (如果不設定，存下來的圖預設背景是透明，截圖有時會怪怪的)
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 如果有初始簽名（例如在編輯模式），則載入並畫到畫布上
+        if (initialSignature) {
+           const img = new window.Image();
+           img.onload = () => {
+              ctx.drawImage(img, 0, 0, canvas.offsetWidth, canvas.offsetHeight);
+           };
+           img.src = initialSignature;
+        }
+
+        ctx.strokeStyle = '#0f172a'; // 深灰色筆跡
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+      }, [initialSignature]);
+
+      const startDrawing = (e) => {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const rect = canvas.getBoundingClientRect();
+        
+        let clientX = e.clientX;
+        let clientY = e.clientY;
+        
+        if(e.touches && e.touches.length > 0) {
+           clientX = e.touches[0].clientX;
+           clientY = e.touches[0].clientY;
+           e.preventDefault(); // 防止手機滾動
+        }
+
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        setIsDrawing(true);
+      };
+
+      const draw = (e) => {
+        if (!isDrawing) return;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const rect = canvas.getBoundingClientRect();
+        
+        let clientX = e.clientX;
+        let clientY = e.clientY;
+
+        if(e.touches && e.touches.length > 0) {
+           clientX = e.touches[0].clientX;
+           clientY = e.touches[0].clientY;
+           e.preventDefault();
+        }
+
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      };
+
+      const stopDrawing = () => {
+        setIsDrawing(false);
+      };
+
+      const handleClear = () => {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      };
+
+      const handleSave = () => {
+        const canvas = canvasRef.current;
+        // 將圖片壓縮成品質較低的 JPEG，減少儲存空間 (0.5 代表 50% 品質)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.5); 
+        onSave(dataUrl);
+      };
+
+      return (
+        <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col h-[60vh] max-h-[500px]">
+             <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                   <Icon name="PenTool" /> 員工簽名板 (可多人簽名)
+                </h3>
+                <button onClick={onCancel} className="text-slate-400 hover:text-slate-600">
+                   <Icon name="X" size={24} />
+                </button>
+             </div>
+             
+             <div className="flex-1 bg-slate-200 relative p-2">
+                <canvas 
+                   ref={canvasRef}
+                   className="w-full h-full bg-white rounded-lg shadow-inner cursor-crosshair touch-none"
+                   onMouseDown={startDrawing}
+                   onMouseMove={draw}
+                   onMouseUp={stopDrawing}
+                   onMouseLeave={stopDrawing}
+                   onTouchStart={startDrawing}
+                   onTouchMove={draw}
+                   onTouchEnd={stopDrawing}
+                />
+                <div className="absolute top-4 left-4 text-slate-300 pointer-events-none text-xl font-bold opacity-30 select-none">
+                   請在此處簽名
+                </div>
+             </div>
+             
+             <div className="p-4 flex gap-3 bg-white border-t">
+                <button 
+                  onClick={handleClear}
+                  className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 transition-colors"
+                >
+                  重簽 (清除)
+                </button>
+                <button 
+                  onClick={handleSave}
+                  className="flex-[2] py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  完成簽名
+                </button>
+             </div>
+          </div>
+        </div>
+      );
+    };
+
     function App() {
       const tableRef = useRef(null);
       
@@ -80,11 +226,14 @@
 
       const [records, setRecords] = useState([]);
       const [isLoading, setIsLoading] = useState(false);
-      const [isSyncingBackground, setIsSyncingBackground] = useState(false); // ★ 新增：背景同步狀態
+      const [isSyncingBackground, setIsSyncingBackground] = useState(false);
       const [isGenerating, setIsGenerating] = useState(false);
       const [toastMessage, setToastMessage] = useState('');
+      
+      // ★ 新增：控制簽名板開關與編輯狀態
+      const [showSignaturePad, setShowSignaturePad] = useState(false);
 
-      const defaultForm = { date: getLocalISODate(), flatQty: '', pillowQty: '', onTime: '', offTime: '', sign1: '', sign2: '' };
+      const defaultForm = { date: getLocalISODate(), flatQty: '', pillowQty: '', onTime: '', offTime: '', signature: '' };
       const [formData, setFormData] = useState(defaultForm);
       const [editingId, setEditingId] = useState(null);
 
@@ -107,14 +256,14 @@
 
       const loadLocalRecords = () => {
         try {
-          const saved = localStorage.getItem('machineRecords_local');
+          const saved = localStorage.getItem('machineRecords_local_v2'); // 改版號避免衝突
           if (saved) setRecords(JSON.parse(saved));
           else setRecords([]);
         } catch (e) {}
       };
 
       const saveLocalRecords = (newRecords) => {
-        localStorage.setItem('machineRecords_local', JSON.stringify(newRecords));
+        localStorage.setItem('machineRecords_local_v2', JSON.stringify(newRecords));
         setRecords(newRecords);
       };
 
@@ -131,18 +280,16 @@
           try {
              data = JSON.parse(textData);
           } catch (e) {
-             console.error("解析 JSON 失敗。伺服器回傳內容:", textData);
-             throw new Error("伺服器回傳的不是有效的 JSON 格式");
+             throw new Error("伺服器回傳格式錯誤");
           }
           
           if (data.status === 'error') {
-             console.error("GAS 內部錯誤:", data.message);
              showToast(`讀取錯誤: ${data.message}`);
              return;
           }
 
           setRecords(Array.isArray(data) ? data : []);
-          showToast("已從試算表同步最新資料");
+          showToast("已從試算表同步資料");
         } catch (error) {
           console.error("Fetch Error:", error);
           showToast(`連線失敗: ${error.message}`);
@@ -151,11 +298,10 @@
         }
       };
 
-      // ★ 改寫：極速儲存核心 (背景送出)
       const sendToCloudBackground = async (action, payload) => {
         if (!appConfig.apiUrl) return;
         
-        setIsSyncingBackground(true); // 開啟背景同步狀態 (畫面上方小圈圈，但不卡畫面)
+        setIsSyncingBackground(true);
         
         try {
           const bodyData = JSON.stringify({ action: action, ...payload });
@@ -174,20 +320,18 @@
           try {
              responseData = JSON.parse(textData);
           } catch(e) {
-             console.error("解析 POST 回傳 JSON 失敗。伺服器回傳內容:", textData);
-             throw new Error("伺服器回傳的不是有效的 JSON 格式");
+             throw new Error("回傳格式錯誤");
           }
 
           if (responseData.status !== 'success') {
-             console.error("雲端回報錯誤:", responseData.message);
              showToast(`雲端同步失敗: ${responseData.message}`);
           }
 
         } catch (error) {
           console.error("Post Error:", error);
-          showToast(`雲端同步失敗: ${error.message}`);
+          showToast(`傳輸失敗: ${error.message}`);
         } finally {
-          setIsSyncingBackground(false); // 關閉背景同步狀態
+          setIsSyncingBackground(false);
         }
       };
 
@@ -207,38 +351,34 @@
           return;
         }
 
-        // ★ 極速儲存機制：先更新本地畫面，再背景送出
         const recordId = editingId || Date.now().toString();
         const recordToSave = { ...formData, id: recordId };
         
         if (editingId) {
-          // 更新畫面
           const updatedRecords = records.map(r => r.id === editingId ? recordToSave : r);
           setRecords(updatedRecords);
           setEditingId(null);
-          showToast("紀錄已更新 (背景同步中...)");
+          showToast("紀錄已更新");
         } else {
-          // 新增至畫面
           const updatedRecords = [...records, recordToSave];
           setRecords(updatedRecords);
-          showToast("紀錄已儲存 (背景同步中...)");
+          showToast("紀錄已新增");
         }
         
-        // 清空表單，讓使用者可以立刻打下一筆
         setFormData({ ...defaultForm, date: getLocalISODate() });
 
-        // 背景發送給 Google 試算表
         if (appConfig.mode === 'api') {
            const action = editingId ? 'update' : 'create';
            sendToCloudBackground(action, { record: recordToSave });
         } else {
-           // 本地模式直接存 LocalStorage
            saveLocalRecords(editingId ? records.map(r => r.id === editingId ? recordToSave : r) : [...records, recordToSave]);
         }
       };
 
       const handleEdit = (record) => {
-        setFormData(record);
+        // 相容舊資料格式，把 sign1 和 sign2 清掉避免報錯
+        const { sign1, sign2, ...safeRecord } = record;
+        setFormData(safeRecord);
         setEditingId(record.id);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       };
@@ -250,17 +390,20 @@
 
       const handleDelete = async (id) => {
         if(window.confirm('確定要刪除這筆紀錄嗎？')) {
-          // 先從畫面移除
           setRecords(records.filter(record => record.id !== id));
-          showToast("紀錄已刪除 (背景同步中...)");
+          showToast("紀錄已刪除");
           
           if (appConfig.mode === 'api') {
-            // 背景告訴雲端刪除
             sendToCloudBackground('delete', { id: id });
           } else {
             saveLocalRecords(records.filter(record => record.id !== id));
           }
         }
+      };
+      
+      const handleSaveSignature = (dataUrl) => {
+         setFormData(prev => ({ ...prev, signature: dataUrl }));
+         setShowSignaturePad(false);
       };
 
       const handleShareImage = async () => {
@@ -328,12 +471,21 @@
       return (
         <div className="min-h-screen p-2 md:p-4 pb-20 relative">
           
-          {/* Toast 提示 */}
+          {/* Toast */}
           {toastMessage && (
             <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 transition-all">
               {(isLoading || isGenerating || isSyncingBackground) ? <Icon name="Loader2" className="animate-spin" size={18} /> : <Icon name="Save" size={18} />}
               {toastMessage}
             </div>
+          )}
+
+          {/* 簽名板 */}
+          {showSignaturePad && (
+             <SignaturePad 
+                onCancel={() => setShowSignaturePad(false)} 
+                onSave={handleSaveSignature}
+                initialSignature={formData.signature}
+             />
           )}
 
           {showSettings && (
@@ -353,9 +505,6 @@
                       className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
                       placeholder="https://script.google.com/macros/s/.../exec"
                     />
-                    <p className="text-xs text-slate-500 mt-2">
-                      請確保網址是正確的 Apps Script URL。
-                    </p>
                   </div>
                   <div className="flex gap-2 pt-4">
                     <button 
@@ -438,7 +587,6 @@
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
               
-              {/* 表單區塊（不再被轉圈圈卡住） */}
               <div className="lg:col-span-1 bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200 border-t-4 border-t-blue-500 relative">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-bold flex items-center gap-2 text-blue-800">
@@ -491,18 +639,35 @@
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">撿套簽名</label>
-                      <input type="text" name="sign1" value={formData.sign1} onChange={handleInputChange} className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="姓名" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">放套簽名</label>
-                      <input type="text" name="sign2" value={formData.sign2} onChange={handleInputChange} className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="姓名" />
-                    </div>
+                  {/* ★ 替換為手寫簽名按鈕區塊 */}
+                  <div>
+                     <label className="block text-sm font-medium text-slate-700 mb-2">撿套/放套簽名</label>
+                     <div className="p-3 border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 flex flex-col items-center justify-center gap-3">
+                        {formData.signature ? (
+                           <div className="relative w-full">
+                              <img src={formData.signature} alt="員工簽名" className="w-full h-auto bg-white rounded shadow border border-slate-200 max-h-[120px] object-contain" />
+                              <button 
+                                 type="button"
+                                 onClick={() => setShowSignaturePad(true)}
+                                 className="absolute top-2 right-2 bg-slate-800/70 text-white p-1.5 rounded-md hover:bg-slate-800 backdrop-blur-sm transition-colors text-xs flex items-center gap-1"
+                              >
+                                 <Icon name="Edit" size={14} /> 重簽/補簽
+                              </button>
+                           </div>
+                        ) : (
+                           <button 
+                             type="button" 
+                             onClick={() => setShowSignaturePad(true)}
+                             className="w-full py-4 bg-white border border-slate-300 rounded-lg text-slate-600 font-bold hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 transition-all flex flex-col items-center justify-center gap-1 shadow-sm"
+                           >
+                             <Icon name="PenTool" size={24} />
+                             <span>點擊此處手寫簽名</span>
+                             <span className="text-xs text-slate-400 font-normal">支援多人共同簽名</span>
+                           </button>
+                        )}
+                     </div>
                   </div>
 
-                  {/* 儲存按鈕不再因為背景傳輸而被 Disable */}
                   <button type="submit" className={`w-full mt-4 text-white font-bold p-3.5 rounded-lg shadow-sm transition-colors flex justify-center items-center gap-2 ${editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
                     <Icon name="Save" size={20} />
                     {editingId ? '更新紀錄' : (appConfig.mode === 'api' ? '極速儲存' : '儲存紀錄')}
@@ -527,11 +692,11 @@
                     <table className="w-full text-base text-left min-w-[500px]">
                       <thead className="text-slate-500 border-b-2 border-slate-200">
                         <tr>
-                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700">日期</th>
-                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700">時間(開/關)</th>
-                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700">數量(平/枕)</th>
-                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700">簽名(撿/放)</th>
-                          <th data-html2canvas-ignore="true" className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-center text-slate-700">操作</th>
+                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700 w-24">日期</th>
+                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700 w-32">時間(開/關)</th>
+                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700 w-32">數量(平/枕)</th>
+                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700 min-w-[120px]">簽名(撿/放)</th>
+                          <th data-html2canvas-ignore="true" className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-center text-slate-700 w-24">操作</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -548,9 +713,15 @@
                               <div className="text-slate-700 mb-1">平: <span className="font-bold">{record.flatQty || '0'}</span></div>
                               <div className="text-slate-700">枕: <span className="font-bold">{record.pillowQty || '0'}</span></div>
                             </td>
-                            <td className="px-2 md:px-4 py-4 whitespace-nowrap">
-                              <div className="text-slate-700 mb-1">撿: <span className="font-medium">{record.sign1 || '-'}</span></div>
-                              <div className="text-slate-700">放: <span className="font-medium">{record.sign2 || '-'}</span></div>
+                            <td className="px-2 md:px-4 py-3">
+                               {/* ★ 顯示簽名縮圖 */}
+                               {record.signature ? (
+                                  <div className="bg-white p-1 border border-slate-200 rounded w-full max-w-[120px]">
+                                     <img src={record.signature} alt="簽名" className="w-full h-auto object-contain max-h-[40px]" />
+                                  </div>
+                               ) : (
+                                  <span className="text-slate-400 text-sm italic">未簽名</span>
+                               )}
                             </td>
                             <td data-html2canvas-ignore="true" className="px-2 md:px-4 py-4 whitespace-nowrap text-center">
                               <div className="flex justify-center gap-2">

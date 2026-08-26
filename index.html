@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ICC 平燙機</title>
+  <title>ICC 平燙機紀錄系統</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   
@@ -212,12 +212,24 @@
     function App() {
       const tableRef = useRef(null);
       
+      // 直接綁定您的專屬 Google Apps Script 網址
+      const defaultUrl = 'https://script.google.com/macros/s/AKfycbyjZUFfWcoPBO88YyXPJtsPdxMO7YyivgPtDZZ7R009HroPtup6_lNmOR090dclo8Adsw/exec';
+      
       const [appConfig, setAppConfig] = useState(() => {
         try {
           const saved = localStorage.getItem('machineAppConfig');
-          return saved ? JSON.parse(saved) : { mode: 'local', apiUrl: '' };
+          if (saved) {
+             const parsed = JSON.parse(saved);
+             // 如果員工手機裡存的是空網址，強制覆蓋成您的專屬網址，並切換到雲端模式
+             if (!parsed.apiUrl) {
+                return { mode: 'api', apiUrl: defaultUrl };
+             }
+             return parsed;
+          }
+          // 第一次打開網頁的人，直接預設為雲端模式與您的網址
+          return { mode: 'api', apiUrl: defaultUrl };
         } catch (e) {
-          return { mode: 'local', apiUrl: '' };
+          return { mode: 'api', apiUrl: defaultUrl };
         }
       });
       

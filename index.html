@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ICC 平燙機紀錄系統</title>
+  <title>ICC平燙機紀錄系統</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   
@@ -64,27 +64,22 @@
       return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     };
 
-    // ★ 新增簽名板元件
     const SignaturePad = ({ onSave, onCancel, initialSignature }) => {
       const canvasRef = useRef(null);
-      const [isDrawing, setIsDrawing] = useState(false);
 
       useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         
-        // 設定高解析度畫布以獲得平滑的線條
         const ctx = canvas.getContext('2d');
         const ratio = Math.max(window.devicePixelRatio || 1, 1);
         canvas.width = canvas.offsetWidth * ratio;
         canvas.height = canvas.offsetHeight * ratio;
         ctx.scale(ratio, ratio);
         
-        // 預設白色背景 (如果不設定，存下來的圖預設背景是透明，截圖有時會怪怪的)
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // 如果有初始簽名（例如在編輯模式），則載入並畫到畫布上
         if (initialSignature) {
            const img = new window.Image();
            img.onload = () => {
@@ -93,59 +88,73 @@
            img.src = initialSignature;
         }
 
-        ctx.strokeStyle = '#0f172a'; // 深灰色筆跡
+        ctx.strokeStyle = '#0f172a';
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
+
+        let isDrawing = false;
+
+        const getPos = (e) => {
+          const rect = canvas.getBoundingClientRect();
+          let clientX = e.clientX;
+          let clientY = e.clientY;
+          
+          if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+          }
+          
+          return {
+            x: clientX - rect.left,
+            y: clientY - rect.top
+          };
+        };
+
+        const startDrawing = (e) => {
+          e.preventDefault(); 
+          isDrawing = true;
+          const pos = getPos(e);
+          ctx.beginPath();
+          ctx.moveTo(pos.x, pos.y);
+        };
+
+        const draw = (e) => {
+          e.preventDefault();
+          if (!isDrawing) return;
+          const pos = getPos(e);
+          ctx.lineTo(pos.x, pos.y);
+          ctx.stroke();
+        };
+
+        const stopDrawing = (e) => {
+          e.preventDefault();
+          isDrawing = false;
+        };
+
+        // 加入原生監聽並設定 passive: false 防止手機畫面滑動
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseleave', stopDrawing);
+        
+        canvas.addEventListener('touchstart', startDrawing, { passive: false });
+        canvas.addEventListener('touchmove', draw, { passive: false });
+        canvas.addEventListener('touchend', stopDrawing, { passive: false });
+        canvas.addEventListener('touchcancel', stopDrawing, { passive: false });
+
+        return () => {
+          canvas.removeEventListener('mousedown', startDrawing);
+          canvas.removeEventListener('mousemove', draw);
+          canvas.removeEventListener('mouseup', stopDrawing);
+          canvas.removeEventListener('mouseleave', stopDrawing);
+          
+          canvas.removeEventListener('touchstart', startDrawing);
+          canvas.removeEventListener('touchmove', draw);
+          canvas.removeEventListener('touchend', stopDrawing);
+          canvas.removeEventListener('touchcancel', stopDrawing);
+        };
       }, [initialSignature]);
-
-      const startDrawing = (e) => {
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        const rect = canvas.getBoundingClientRect();
-        
-        let clientX = e.clientX;
-        let clientY = e.clientY;
-        
-        if(e.touches && e.touches.length > 0) {
-           clientX = e.touches[0].clientX;
-           clientY = e.touches[0].clientY;
-           e.preventDefault(); // 防止手機滾動
-        }
-
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
-
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        setIsDrawing(true);
-      };
-
-      const draw = (e) => {
-        if (!isDrawing) return;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        const rect = canvas.getBoundingClientRect();
-        
-        let clientX = e.clientX;
-        let clientY = e.clientY;
-
-        if(e.touches && e.touches.length > 0) {
-           clientX = e.touches[0].clientX;
-           clientY = e.touches[0].clientY;
-           e.preventDefault();
-        }
-
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
-
-        ctx.lineTo(x, y);
-        ctx.stroke();
-      };
-
-      const stopDrawing = () => {
-        setIsDrawing(false);
-      };
 
       const handleClear = () => {
         const canvas = canvasRef.current;
@@ -156,7 +165,6 @@
 
       const handleSave = () => {
         const canvas = canvasRef.current;
-        // 將圖片壓縮成品質較低的 JPEG，減少儲存空間 (0.5 代表 50% 品質)
         const dataUrl = canvas.toDataURL('image/jpeg', 0.5); 
         onSave(dataUrl);
       };
@@ -177,13 +185,6 @@
                 <canvas 
                    ref={canvasRef}
                    className="w-full h-full bg-white rounded-lg shadow-inner cursor-crosshair touch-none"
-                   onMouseDown={startDrawing}
-                   onMouseMove={draw}
-                   onMouseUp={stopDrawing}
-                   onMouseLeave={stopDrawing}
-                   onTouchStart={startDrawing}
-                   onTouchMove={draw}
-                   onTouchEnd={stopDrawing}
                 />
                 <div className="absolute top-4 left-4 text-slate-300 pointer-events-none text-xl font-bold opacity-30 select-none">
                    請在此處簽名
@@ -212,24 +213,21 @@
     function App() {
       const tableRef = useRef(null);
       
-      // 直接綁定您的專屬 Google Apps Script 網址
-      const defaultUrl = 'https://script.google.com/macros/s/AKfycbyjZUFfWcoPBO88YyXPJtsPdxMO7YyivgPtDZZ7R009HroPtup6_lNmOR090dclo8Adsw/exec';
+      // ★ 強制將您的專屬 Google 試算表網址寫死在系統中
+      const MY_GAS_URL = "https://script.google.com/macros/s/AKfycbyjZUFfWcoPBO88YyXPJtsPdxMO7YyivgPtDZZ7R009HroPtup6_lNmOR090dclo8Adsw/exec";
       
       const [appConfig, setAppConfig] = useState(() => {
         try {
+          // 強制讀取本地設定時，覆寫成您的 API
           const saved = localStorage.getItem('machineAppConfig');
-          if (saved) {
-             const parsed = JSON.parse(saved);
-             // 如果員工手機裡存的是空網址，強制覆蓋成您的專屬網址，並切換到雲端模式
-             if (!parsed.apiUrl) {
-                return { mode: 'api', apiUrl: defaultUrl };
-             }
-             return parsed;
+          let config = saved ? JSON.parse(saved) : { mode: 'api', apiUrl: MY_GAS_URL };
+          // 如果不是這個 API 或是本機模式，強制切回
+          if (config.apiUrl !== MY_GAS_URL || config.mode !== 'api') {
+            config = { mode: 'api', apiUrl: MY_GAS_URL };
           }
-          // 第一次打開網頁的人，直接預設為雲端模式與您的網址
-          return { mode: 'api', apiUrl: defaultUrl };
+          return config;
         } catch (e) {
-          return { mode: 'api', apiUrl: defaultUrl };
+          return { mode: 'api', apiUrl: MY_GAS_URL };
         }
       });
       
@@ -237,16 +235,16 @@
       const [tempUrl, setTempUrl] = useState(appConfig.apiUrl);
 
       const [records, setRecords] = useState([]);
-      const [isLoading, setIsLoading] = useState(false);
-      const [isSyncingBackground, setIsSyncingBackground] = useState(false);
+      const [isFetching, setIsFetching] = useState(false); // 控制雲端拉資料
+      const [isSyncing, setIsSyncing] = useState(false); // 控制背景上傳
       const [isGenerating, setIsGenerating] = useState(false);
       const [toastMessage, setToastMessage] = useState('');
-      
-      // ★ 新增：控制簽名板開關與編輯狀態
-      const [showSignaturePad, setShowSignaturePad] = useState(false);
 
-      const defaultForm = { date: getLocalISODate(), flatQty: '', pillowQty: '', onTime: '', offTime: '', signature: '' };
+      const defaultForm = { date: getLocalISODate(), flatQty: '', pillowQty: '', onTime: '', offTime: '' };
       const [formData, setFormData] = useState(defaultForm);
+      const [signature, setSignature] = useState(null); // 存放目前的簽名圖片
+      const [showSignaturePad, setShowSignaturePad] = useState(false); // 控制簽名板顯示
+      
       const [editingId, setEditingId] = useState(null);
 
       const currentMonthPrefix = getLocalISODate().substring(0, 7);
@@ -268,7 +266,7 @@
 
       const loadLocalRecords = () => {
         try {
-          const saved = localStorage.getItem('machineRecords_local_v2'); // 改版號避免衝突
+          const saved = localStorage.getItem('machineRecords_local_v2');
           if (saved) setRecords(JSON.parse(saved));
           else setRecords([]);
         } catch (e) {}
@@ -279,71 +277,25 @@
         setRecords(newRecords);
       };
 
+      // 抓取雲端資料
       const fetchCloudRecords = async () => {
         if (!appConfig.apiUrl) return;
-        setIsLoading(true);
+        setIsFetching(true);
         try {
           const response = await fetch(appConfig.apiUrl, { cache: 'no-store' });
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+          if (!response.ok) throw new Error('網路回應錯誤');
+          const data = await response.json();
+          if (Array.isArray(data)) {
+            setRecords(data);
+            saveLocalRecords(data); // 備份一份到本地
+            showToast("已取得最新雲端紀錄");
           }
-          const textData = await response.text();
-          let data;
-          try {
-             data = JSON.parse(textData);
-          } catch (e) {
-             throw new Error("伺服器回傳格式錯誤");
-          }
-          
-          if (data.status === 'error') {
-             showToast(`讀取錯誤: ${data.message}`);
-             return;
-          }
-
-          setRecords(Array.isArray(data) ? data : []);
-          showToast("已從試算表同步資料");
         } catch (error) {
           console.error("Fetch Error:", error);
-          showToast(`連線失敗: ${error.message}`);
+          showToast(`抓取資料失敗，顯示本機快取`);
+          loadLocalRecords(); // 失敗的話秀出本地備份
         } finally {
-          setIsLoading(false);
-        }
-      };
-
-      const sendToCloudBackground = async (action, payload) => {
-        if (!appConfig.apiUrl) return;
-        
-        setIsSyncingBackground(true);
-        
-        try {
-          const bodyData = JSON.stringify({ action: action, ...payload });
-          const response = await fetch(appConfig.apiUrl, {
-            method: 'POST',
-            body: bodyData,
-            redirect: 'follow'
-          });
-
-          if (!response.ok) {
-             throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          
-          const textData = await response.text();
-          let responseData;
-          try {
-             responseData = JSON.parse(textData);
-          } catch(e) {
-             throw new Error("回傳格式錯誤");
-          }
-
-          if (responseData.status !== 'success') {
-             showToast(`雲端同步失敗: ${responseData.message}`);
-          }
-
-        } catch (error) {
-          console.error("Post Error:", error);
-          showToast(`傳輸失敗: ${error.message}`);
-        } finally {
-          setIsSyncingBackground(false);
+          setIsFetching(false);
         }
       };
 
@@ -356,66 +308,104 @@
         setFormData(prev => ({ ...prev, [field]: getCurrentTimeString() }));
       };
 
-      const handleSubmit = async (e) => {
+      // ★ 樂觀更新 (Optimistic UI) 的儲存邏輯
+      const handleSubmit = (e) => {
         e.preventDefault();
         if (!formData.date) {
           showToast("請選擇日期！");
           return;
         }
 
-        const recordId = editingId || Date.now().toString();
-        const recordToSave = { ...formData, id: recordId };
-        
-        if (editingId) {
-          const updatedRecords = records.map(r => r.id === editingId ? recordToSave : r);
-          setRecords(updatedRecords);
-          setEditingId(null);
-          showToast("紀錄已更新");
-        } else {
-          const updatedRecords = [...records, recordToSave];
-          setRecords(updatedRecords);
-          showToast("紀錄已新增");
-        }
-        
-        setFormData({ ...defaultForm, date: getLocalISODate() });
+        const newId = editingId ? editingId : Date.now().toString();
+        const recordToSave = { ...formData, id: newId, signature: signature };
+        let updatedRecords = [];
 
-        if (appConfig.mode === 'api') {
-           const action = editingId ? 'update' : 'create';
-           sendToCloudBackground(action, { record: recordToSave });
+        // 1. 瞬間更新本地畫面 (不等待雲端)
+        if (editingId) {
+          updatedRecords = records.map(r => r.id === editingId ? recordToSave : r);
         } else {
-           saveLocalRecords(editingId ? records.map(r => r.id === editingId ? recordToSave : r) : [...records, recordToSave]);
+          updatedRecords = [...records, recordToSave];
+        }
+        saveLocalRecords(updatedRecords); // 存進本地，畫面秒速重繪
+        
+        // 2. 清空表單
+        setEditingId(null);
+        setFormData({ ...defaultForm, date: getLocalISODate() });
+        setSignature(null);
+        showToast("已暫存，背景上傳中...");
+
+        // 3. 背景偷偷上傳到 Google 試算表
+        if (appConfig.mode === 'api' && appConfig.apiUrl) {
+           setIsSyncing(true);
+           const action = editingId ? 'update' : 'create';
+           
+           fetch(appConfig.apiUrl, {
+              method: 'POST',
+              body: JSON.stringify({ action: action, record: recordToSave })
+           })
+           .then(res => res.json())
+           .then(result => {
+              if (result && result.status === 'success') {
+                 showToast("✓ 雲端同步完成");
+                 // 背景重新抓取確保資料庫對齊 (不一定要做，但比較保險)
+                 fetchCloudRecords(); 
+              } else {
+                 showToast("上傳雲端失敗，下次重整會嘗試");
+              }
+           })
+           .catch(err => {
+              console.error("背景上傳失敗", err);
+              showToast("背景上傳失敗，保留於本機");
+           })
+           .finally(() => {
+              setIsSyncing(false);
+           });
         }
       };
 
       const handleEdit = (record) => {
-        // 相容舊資料格式，把 sign1 和 sign2 清掉避免報錯
-        const { sign1, sign2, ...safeRecord } = record;
-        setFormData(safeRecord);
+        setFormData({
+          date: record.date || '',
+          flatQty: record.flatQty || '',
+          pillowQty: record.pillowQty || '',
+          onTime: record.onTime || '',
+          offTime: record.offTime || ''
+        });
+        setSignature(record.signature || null);
         setEditingId(record.id);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       };
 
       const handleCancelEdit = () => {
         setFormData({ ...defaultForm, date: getLocalISODate() });
+        setSignature(null);
         setEditingId(null);
       };
 
-      const handleDelete = async (id) => {
+      const handleDelete = (id) => {
         if(window.confirm('確定要刪除這筆紀錄嗎？')) {
-          setRecords(records.filter(record => record.id !== id));
-          showToast("紀錄已刪除");
+          // 1. 本地瞬間刪除
+          const updatedRecords = records.filter(record => record.id !== id);
+          saveLocalRecords(updatedRecords);
           
-          if (appConfig.mode === 'api') {
-            sendToCloudBackground('delete', { id: id });
+          // 2. 背景發送刪除指令
+          if (appConfig.mode === 'api' && appConfig.apiUrl) {
+             setIsSyncing(true);
+             fetch(appConfig.apiUrl, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'delete', id: id })
+             })
+             .then(res => res.json())
+             .then(result => {
+                if (result && result.status === 'success') {
+                   showToast("✓ 雲端已刪除");
+                }
+             })
+             .finally(() => { setIsSyncing(false); });
           } else {
-            saveLocalRecords(records.filter(record => record.id !== id));
+            showToast("本機紀錄已刪除");
           }
         }
-      };
-      
-      const handleSaveSignature = (dataUrl) => {
-         setFormData(prev => ({ ...prev, signature: dataUrl }));
-         setShowSignaturePad(false);
       };
 
       const handleShareImage = async () => {
@@ -445,14 +435,14 @@
 
           canvas.toBlob(async (blob) => {
             if (!blob) throw new Error("Canvas is empty");
-            const fileName = `輪燙機_${currentDisplayMonth}月.png`;
+            const fileName = `ICC平燙機_${currentDisplayMonth}月.png`;
             const file = new File([blob], fileName, { type: 'image/png' });
 
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
               try {
                 await navigator.share({
                   files: [file],
-                  title: `800-3 輪燙機紀錄表`,
+                  title: `ICC平燙機紀錄表`,
                   text: `傳送 ${currentDisplayMonth}月份 紀錄表`
                 });
                 showToast("準備分享！");
@@ -483,21 +473,23 @@
       return (
         <div className="min-h-screen p-2 md:p-4 pb-20 relative">
           
-          {/* Toast */}
           {toastMessage && (
-            <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 transition-all">
-              {(isLoading || isGenerating || isSyncingBackground) ? <Icon name="Loader2" className="animate-spin" size={18} /> : <Icon name="Save" size={18} />}
+            <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-2xl flex items-center gap-2 transition-all font-bold">
+              {isFetching || isSyncing || isGenerating ? <Icon name="Loader2" className="animate-spin" size={20} /> : <Icon name="Save" size={20} />}
               {toastMessage}
             </div>
           )}
 
-          {/* 簽名板 */}
+          {/* 簽名板跳窗 */}
           {showSignaturePad && (
-             <SignaturePad 
-                onCancel={() => setShowSignaturePad(false)} 
-                onSave={handleSaveSignature}
-                initialSignature={formData.signature}
-             />
+            <SignaturePad 
+               initialSignature={signature}
+               onSave={(dataUrl) => {
+                 setSignature(dataUrl);
+                 setShowSignaturePad(false);
+               }}
+               onCancel={() => setShowSignaturePad(false)}
+            />
           )}
 
           {showSettings && (
@@ -505,38 +497,20 @@
               <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
                 <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                   <Icon name="Cloud" size={24} className="text-blue-500" />
-                  雲端試算表連線設定
+                  管理員設定
                 </h3>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Google Apps Script 網址 (URL)</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">強制連接的 Google 試算表</label>
                     <input 
                       type="text" 
-                      value={tempUrl}
-                      onChange={(e) => setTempUrl(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
-                      placeholder="https://script.google.com/macros/s/.../exec"
+                      value={MY_GAS_URL}
+                      readOnly
+                      className="w-full p-2 border border-slate-200 bg-slate-100 rounded-lg outline-none font-mono text-xs text-slate-500"
                     />
-                  </div>
-                  <div className="flex gap-2 pt-4">
-                    <button 
-                      onClick={() => {
-                        setAppConfig({ mode: 'api', apiUrl: tempUrl });
-                        setShowSettings(false);
-                      }}
-                      className="flex-1 bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      連線
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setAppConfig({ mode: 'local', apiUrl: '' });
-                        setShowSettings(false);
-                      }}
-                      className="flex-1 bg-slate-200 text-slate-700 font-bold py-2 rounded-lg hover:bg-slate-300 transition-colors"
-                    >
-                      使用本機
-                    </button>
+                    <p className="text-xs text-slate-500 mt-2">
+                      系統已寫死綁定您的試算表，員工開啟即用，無需設定。
+                    </p>
                   </div>
                 </div>
                 <button onClick={() => setShowSettings(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
@@ -554,11 +528,12 @@
                   <Icon name="FileSpreadsheet" size={32} />
                 </div>
                 <div>
-                  <h1 className="text-xl md:text-2xl font-bold text-slate-800">800-3 輪燙機日誌</h1>
+                  <h1 className="text-xl md:text-2xl font-bold text-slate-800">ICC平燙機日誌</h1>
                   <div className="flex items-center gap-2 mt-1">
                     {appConfig.mode === 'api' ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700">
-                        <Icon name="Cloud" size={12} /> {isSyncingBackground ? '雲端背景同步中...' : '雲端連線中'}
+                        {isSyncing ? <Icon name="Loader2" size={12} className="animate-spin" /> : <Icon name="Cloud" size={12} />} 
+                        {isSyncing ? "雲端同步中..." : "雲端自動連線"}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-600">
@@ -573,18 +548,18 @@
                 {appConfig.mode === 'api' && (
                    <button 
                      onClick={fetchCloudRecords}
-                     disabled={isLoading || isSyncingBackground}
+                     disabled={isFetching}
                      className="flex items-center justify-center gap-1 bg-blue-50 text-blue-600 px-3 py-2.5 rounded-lg font-bold hover:bg-blue-100 transition-all disabled:opacity-50"
                    >
-                     <Icon name="RefreshCw" size={18} className={(isLoading || isSyncingBackground) ? 'animate-spin' : ''} />
-                     同步
+                     <Icon name="RefreshCw" size={18} className={isFetching ? 'animate-spin' : ''} />
+                     重整
                    </button>
                 )}
                 <button 
                   onClick={() => setShowSettings(true)}
                   className="flex items-center justify-center gap-1 bg-slate-100 text-slate-700 px-3 py-2.5 rounded-lg font-bold hover:bg-slate-200 transition-all"
                 >
-                  <Icon name="Settings" size={18} /> 設定
+                  <Icon name="Settings" size={18} />
                 </button>
                 <button 
                   onClick={handleShareImage}
@@ -651,48 +626,40 @@
                     </div>
                   </div>
 
-                  {/* ★ 替換為手寫簽名按鈕區塊 */}
+                  {/* ★ 改成手寫簽名按鈕區塊 */}
                   <div>
-                     <label className="block text-sm font-medium text-slate-700 mb-2">撿套/放套簽名</label>
-                     <div className="p-3 border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 flex flex-col items-center justify-center gap-3">
-                        {formData.signature ? (
-                           <div className="relative w-full">
-                              <img src={formData.signature} alt="員工簽名" className="w-full h-auto bg-white rounded shadow border border-slate-200 max-h-[120px] object-contain" />
-                              <button 
-                                 type="button"
-                                 onClick={() => setShowSignaturePad(true)}
-                                 className="absolute top-2 right-2 bg-slate-800/70 text-white p-1.5 rounded-md hover:bg-slate-800 backdrop-blur-sm transition-colors text-xs flex items-center gap-1"
-                              >
-                                 <Icon name="Edit" size={14} /> 重簽/補簽
-                              </button>
-                           </div>
-                        ) : (
-                           <button 
-                             type="button" 
-                             onClick={() => setShowSignaturePad(true)}
-                             className="w-full py-4 bg-white border border-slate-300 rounded-lg text-slate-600 font-bold hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 transition-all flex flex-col items-center justify-center gap-1 shadow-sm"
-                           >
-                             <Icon name="PenTool" size={24} />
-                             <span>點擊此處手寫簽名</span>
-                             <span className="text-xs text-slate-400 font-normal">支援多人共同簽名</span>
-                           </button>
-                        )}
-                     </div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">員工簽名</label>
+                    <div 
+                      onClick={() => setShowSignaturePad(true)}
+                      className={`w-full min-h-[80px] p-2 bg-slate-50 border border-slate-300 rounded-lg cursor-pointer hover:bg-blue-50 transition-colors flex items-center justify-center ${signature ? 'border-blue-400 border-2' : 'border-dashed border-2'}`}
+                    >
+                      {signature ? (
+                         <img src={signature} alt="員工簽名" className="max-h-[70px] max-w-full object-contain" />
+                      ) : (
+                         <div className="text-slate-400 flex flex-col items-center gap-1">
+                           <Icon name="PenTool" size={24} />
+                           <span className="text-sm font-medium">點擊此處手寫簽名</span>
+                         </div>
+                      )}
+                    </div>
                   </div>
 
                   <button type="submit" className={`w-full mt-4 text-white font-bold p-3.5 rounded-lg shadow-sm transition-colors flex justify-center items-center gap-2 ${editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
                     <Icon name="Save" size={20} />
-                    {editingId ? '更新紀錄' : (appConfig.mode === 'api' ? '極速儲存' : '儲存紀錄')}
+                    {editingId ? '更新紀錄 (瞬間完成)' : '儲存紀錄 (瞬間完成)'}
                   </button>
                 </form>
               </div>
 
               <div className="lg:col-span-2 relative">
+                {isFetching && (
+                  <div className="absolute inset-0 bg-white/40 z-10 flex items-center justify-center rounded-xl"></div>
+                )}
                 <div ref={tableRef} data-screenshot-outer="true" className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col w-full">
                   <div className="p-4 md:p-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                     <div>
                       <h2 className="text-xl font-extrabold text-slate-800">
-                        800-3 輪燙機 {currentDisplayMonth}月份紀錄
+                        ICC平燙機 {currentDisplayMonth}月份紀錄
                       </h2>
                     </div>
                     <div className="text-sm px-3 py-1 bg-blue-100 text-blue-800 font-bold rounded-lg">
@@ -704,11 +671,11 @@
                     <table className="w-full text-base text-left min-w-[500px]">
                       <thead className="text-slate-500 border-b-2 border-slate-200">
                         <tr>
-                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700 w-24">日期</th>
-                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700 w-32">時間(開/關)</th>
-                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700 w-32">數量(平/枕)</th>
-                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700 min-w-[120px]">簽名(撿/放)</th>
-                          <th data-html2canvas-ignore="true" className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-center text-slate-700 w-24">操作</th>
+                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700">日期</th>
+                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700">時間(開/關)</th>
+                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700">數量(平/枕)</th>
+                          <th className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-slate-700 min-w-[120px]">員工簽名</th>
+                          <th data-html2canvas-ignore="true" className="px-2 md:px-4 py-3 font-bold whitespace-nowrap text-center text-slate-700">操作</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -725,15 +692,13 @@
                               <div className="text-slate-700 mb-1">平: <span className="font-bold">{record.flatQty || '0'}</span></div>
                               <div className="text-slate-700">枕: <span className="font-bold">{record.pillowQty || '0'}</span></div>
                             </td>
-                            <td className="px-2 md:px-4 py-3">
-                               {/* ★ 顯示簽名縮圖 */}
-                               {record.signature ? (
-                                  <div className="bg-white p-1 border border-slate-200 rounded w-full max-w-[120px]">
-                                     <img src={record.signature} alt="簽名" className="w-full h-auto object-contain max-h-[40px]" />
-                                  </div>
-                               ) : (
-                                  <span className="text-slate-400 text-sm italic">未簽名</span>
-                               )}
+                            <td className="px-2 md:px-4 py-4 whitespace-nowrap">
+                              {/* ★ 顯示簽名縮圖 */}
+                              {record.signature ? (
+                                <img src={record.signature} alt="簽名" className="h-10 object-contain border border-slate-200 rounded bg-white px-1" />
+                              ) : (
+                                <span className="text-slate-400 text-sm">無簽名</span>
+                              )}
                             </td>
                             <td data-html2canvas-ignore="true" className="px-2 md:px-4 py-4 whitespace-nowrap text-center">
                               <div className="flex justify-center gap-2">
@@ -746,7 +711,7 @@
                         {sortedCurrentMonthRecords.length === 0 && (
                           <tr>
                             <td colSpan="5" className="px-4 py-12 text-center text-slate-500 text-lg">
-                              {appConfig.mode === 'api' ? '雲端資料庫目前尚無本月紀錄' : '本月目前還沒有紀錄資料'}
+                              本月目前還沒有紀錄資料
                             </td>
                           </tr>
                         )}
@@ -754,7 +719,7 @@
                     </table>
                   </div>
                   <div className="px-4 py-2 text-right text-xs text-slate-300 font-medium bg-white">
-                    {appConfig.mode === 'api' ? 'Synced with Google Sheets' : 'Generated by Digital Factory System'}
+                    ICC Factory System - Sync Enabled
                   </div>
                 </div>
               </div>

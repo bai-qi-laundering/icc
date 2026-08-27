@@ -74,7 +74,6 @@
         const ctx = canvas.getContext('2d');
         let isDrawing = false;
 
-        // 【修正1】延遲初始化機制：確保手機端的 Modal 彈出並完成排版後，才計算 Canvas 寬高
         const initCanvas = () => {
           if (canvas.offsetWidth === 0 || canvas.offsetHeight === 0) {
             // 如果寬高還是 0，代表畫面還沒準備好，延遲 50 毫秒後重試
@@ -111,14 +110,7 @@
 
         const getPos = (e) => {
           const rect = canvas.getBoundingClientRect();
-          // 優先處理 Touch 事件的座標 (若瀏覽器觸發原生 Touch)
-          if (e.touches && e.touches.length > 0) {
-            return {
-              x: e.touches[0].clientX - rect.left,
-              y: e.touches[0].clientY - rect.top
-            };
-          }
-          // 處理 Pointer 或 Mouse 事件的座標
+          // 因為已全面改用 pointer event，所以直接使用 clientX / clientY
           return {
             x: e.clientX - rect.left,
             y: e.clientY - rect.top
@@ -146,18 +138,12 @@
           isDrawing = false;
         };
 
-        // 【修正2】全面改用 Pointer Events，它能無縫接軌手機觸控、滑鼠與觸控筆
+        // 全面改用 Pointer Events，無縫接軌手機觸控、滑鼠與觸控筆，避免重複觸發
         canvas.addEventListener('pointerdown', startDrawing, { passive: false });
         canvas.addEventListener('pointermove', draw, { passive: false });
         canvas.addEventListener('pointerup', stopDrawing, { passive: false });
         canvas.addEventListener('pointercancel', stopDrawing, { passive: false });
         canvas.addEventListener('pointerout', stopDrawing, { passive: false });
-
-        // 保留原有的 Touch 事件做為雙重保險（防止部分舊版手機瀏覽器將頁面拖走）
-        canvas.addEventListener('touchstart', startDrawing, { passive: false });
-        canvas.addEventListener('touchmove', draw, { passive: false });
-        canvas.addEventListener('touchend', stopDrawing, { passive: false });
-        canvas.addEventListener('touchcancel', stopDrawing, { passive: false });
 
         return () => {
           canvas.removeEventListener('pointerdown', startDrawing);
@@ -165,11 +151,6 @@
           canvas.removeEventListener('pointerup', stopDrawing);
           canvas.removeEventListener('pointercancel', stopDrawing);
           canvas.removeEventListener('pointerout', stopDrawing);
-
-          canvas.removeEventListener('touchstart', startDrawing);
-          canvas.removeEventListener('touchmove', draw);
-          canvas.removeEventListener('touchend', stopDrawing);
-          canvas.removeEventListener('touchcancel', stopDrawing);
         };
       }, [initialSignature]);
 
@@ -177,7 +158,6 @@
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = "#ffffff";
-        // 修正清除範圍，對齊 offsetWidth
         ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
       };
 
@@ -199,11 +179,11 @@
                 </button>
              </div>
 
-             <div className="flex-1 bg-slate-200 relative p-2 flex flex-col">
+             <div className="flex-1 bg-slate-200 relative p-2 flex flex-col min-h-0">
                 <canvas 
                    ref={canvasRef}
                    style={{ touchAction: 'none' }} 
-                   className="flex-1 w-full bg-white rounded-lg shadow-inner cursor-crosshair touch-none"
+                   className="w-full h-full block bg-white rounded-lg shadow-inner cursor-crosshair touch-none"
                 />
                 <div className="absolute top-6 left-6 text-slate-300 pointer-events-none text-xl font-bold opacity-30 select-none">
                    請在此處簽名
@@ -298,7 +278,6 @@
         if (!appConfig.apiUrl) return;
         setIsFetching(true);
         try {
-          // 加上 no-cache 避免抓到舊資料
           const response = await fetch(appConfig.apiUrl, { cache: 'no-store' });
           if (!response.ok) throw new Error('網路回應錯誤');
           const data = await response.json();
@@ -318,13 +297,11 @@
 
       const sendToCloud = async (action, payload) => {
         if (!appConfig.apiUrl) return false;
-        // 不再顯示全螢幕 loading，改用背景同步狀態
         try {
           const bodyData = JSON.stringify({ action: action, ...payload });
 
           const response = await fetch(appConfig.apiUrl, {
             method: 'POST',
-            // 改回標準 JSON 傳輸
             body: bodyData,
             redirect: 'follow' 
           });
@@ -342,7 +319,6 @@
           }
 
           if (responseData.status === 'success') {
-             // 成功後背景重新抓取，不卡頓 UI
              fetchCloudRecords(); 
              return true;
           } else {
@@ -384,7 +360,6 @@
           updatedRecords = [...records, recordToSave];
         }
 
-        // 樂觀更新：立刻將新資料寫入畫面，讓使用者感覺瞬間完成
         setRecords(updatedRecords);
         saveLocalRecords(updatedRecords); 
 
@@ -397,7 +372,6 @@
            setIsSyncing(true);
            const action = editingId ? 'update' : 'create';
 
-           // 背景發送請求，不阻擋 UI
            sendToCloud(action, { record: recordToSave }).then(success => {
                if (success) {
                    showToast("✓ 雲端同步完成");
@@ -429,7 +403,6 @@
       const handleDelete = (id) => {
         if(window.confirm('確定要刪除這筆紀錄嗎？')) {
           const updatedRecords = records.filter(record => record.id !== id);
-          // 樂觀刪除
           setRecords(updatedRecords);
           saveLocalRecords(updatedRecords);
 

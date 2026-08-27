@@ -182,8 +182,10 @@
              </div>
              
              <div className="flex-1 bg-slate-200 relative p-2">
+                {/* 加入 style={{ touchAction: 'none' }} 強制阻擋手機捲動 */}
                 <canvas 
                    ref={canvasRef}
+                   style={{ touchAction: 'none' }}
                    className="w-full h-full bg-white rounded-lg shadow-inner cursor-crosshair touch-none"
                 />
                 <div className="absolute top-4 left-4 text-slate-300 pointer-events-none text-xl font-bold opacity-30 select-none">
@@ -279,6 +281,7 @@
         if (!appConfig.apiUrl) return;
         setIsFetching(true);
         try {
+          // 加上 no-cache 避免抓到舊資料
           const response = await fetch(appConfig.apiUrl, { cache: 'no-store' });
           if (!response.ok) throw new Error('網路回應錯誤');
           const data = await response.json();
@@ -293,6 +296,48 @@
           loadLocalRecords(); 
         } finally {
           setIsFetching(false);
+        }
+      };
+
+      const sendToCloud = async (action, payload) => {
+        if (!appConfig.apiUrl) return false;
+        // 不再顯示全螢幕 loading，改用背景同步狀態
+        try {
+          const bodyData = JSON.stringify({ action: action, ...payload });
+
+          const response = await fetch(appConfig.apiUrl, {
+            method: 'POST',
+            // 改回標準 JSON 傳輸
+            body: bodyData,
+            redirect: 'follow' 
+          });
+
+          if (!response.ok) {
+             throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const textData = await response.text();
+          let responseData;
+          try {
+             responseData = JSON.parse(textData);
+          } catch(e) {
+             throw new Error("伺服器回傳的不是有效的 JSON 格式");
+          }
+
+          if (responseData.status === 'success') {
+             // 成功後背景重新抓取，不卡頓 UI
+             fetchCloudRecords(); 
+             return true;
+          } else {
+             console.error("雲端回報錯誤:", responseData.message);
+             showToast(`背景儲存失敗: ${responseData.message}`);
+             return false;
+          }
+
+        } catch (error) {
+          console.error("Post Error:", error);
+          showToast(`背景傳送失敗，保留於本機`);
+          return false;
         }
       };
 
@@ -321,6 +366,9 @@
         } else {
           updatedRecords = [...records, recordToSave];
         }
+        
+        // 樂觀更新：立刻將新資料寫入畫面，讓使用者感覺瞬間完成
+        setRecords(updatedRecords);
         saveLocalRecords(updatedRecords); 
         
         setEditingId(null);
@@ -332,25 +380,12 @@
            setIsSyncing(true);
            const action = editingId ? 'update' : 'create';
            
-           fetch(appConfig.apiUrl, {
-              method: 'POST',
-              body: JSON.stringify({ action: action, record: recordToSave })
-           })
-           .then(res => res.json())
-           .then(result => {
-              if (result && result.status === 'success') {
-                 showToast("✓ 雲端同步完成");
-                 fetchCloudRecords(); 
-              } else {
-                 showToast("上傳雲端失敗，下次重整會嘗試");
-              }
-           })
-           .catch(err => {
-              console.error("背景上傳失敗", err);
-              showToast("背景上傳失敗，保留於本機");
-           })
-           .finally(() => {
-              setIsSyncing(false);
+           // 背景發送請求，不阻擋 UI
+           sendToCloud(action, { record: recordToSave }).then(success => {
+               if (success) {
+                   showToast("✓ 雲端同步完成");
+               }
+               setIsSyncing(false);
            });
         }
       };
@@ -377,21 +412,16 @@
       const handleDelete = (id) => {
         if(window.confirm('確定要刪除這筆紀錄嗎？')) {
           const updatedRecords = records.filter(record => record.id !== id);
+          // 樂觀刪除
+          setRecords(updatedRecords);
           saveLocalRecords(updatedRecords);
           
           if (appConfig.mode === 'api' && appConfig.apiUrl) {
              setIsSyncing(true);
-             fetch(appConfig.apiUrl, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'delete', id: id })
-             })
-             .then(res => res.json())
-             .then(result => {
-                if (result && result.status === 'success') {
-                   showToast("✓ 雲端已刪除");
-                }
-             })
-             .finally(() => { setIsSyncing(false); });
+             sendToCloud('delete', { id: id }).then(success => {
+                if(success) showToast("✓ 雲端已刪除");
+                setIsSyncing(false);
+             });
           } else {
             showToast("本機紀錄已刪除");
           }
@@ -511,7 +541,7 @@
 
           <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
             
-            { }
+            {/* Header */}
             <header className="bg-white p-4 md:p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className={`p-3 rounded-lg ${appConfig.mode === 'api' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
@@ -564,7 +594,7 @@
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
               
-              { }
+              {/* Form Sidebar */}
               <div className="lg:col-span-1 bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200 border-t-4 border-t-blue-500 relative">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-bold flex items-center gap-2 text-blue-800">
@@ -641,7 +671,7 @@
                 </form>
               </div>
 
-              { }
+              {/* Table Data */}
               <div className="lg:col-span-2 relative">
                 {isFetching && (
                   <div className="absolute inset-0 bg-white/40 z-10 flex items-center justify-center rounded-xl"></div>

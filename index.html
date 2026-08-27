@@ -4,17 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ICC平燙機紀錄系統</title>
-  
+
   <script src="https://cdn.tailwindcss.com"></script>
-  
+
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased font-sans">
-  
+
   <div id="root"></div>
 
   <script type="text/babel">
@@ -70,44 +70,58 @@
       useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        
+
         const ctx = canvas.getContext('2d');
-        const ratio = Math.max(window.devicePixelRatio || 1, 1);
-        canvas.width = canvas.offsetWidth * ratio;
-        canvas.height = canvas.offsetHeight * ratio;
-        ctx.scale(ratio, ratio);
-        
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        if (initialSignature) {
-           const img = new window.Image();
-           img.onload = () => {
-              ctx.drawImage(img, 0, 0, canvas.offsetWidth, canvas.offsetHeight);
-           };
-           img.src = initialSignature;
-        }
-
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
         let isDrawing = false;
+
+        // 【修正1】延遲初始化機制：確保手機端的 Modal 彈出並完成排版後，才計算 Canvas 寬高
+        const initCanvas = () => {
+          if (canvas.offsetWidth === 0 || canvas.offsetHeight === 0) {
+            // 如果寬高還是 0，代表畫面還沒準備好，延遲 50 毫秒後重試
+            setTimeout(initCanvas, 50);
+            return;
+          }
+
+          const ratio = Math.max(window.devicePixelRatio || 1, 1);
+          canvas.width = canvas.offsetWidth * ratio;
+          canvas.height = canvas.offsetHeight * ratio;
+          ctx.scale(ratio, ratio);
+
+          // 填滿白底
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
+
+          if (initialSignature) {
+             const img = new window.Image();
+             img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.offsetWidth, canvas.offsetHeight);
+             };
+             img.src = initialSignature;
+          }
+
+          // 設定筆觸
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 3;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+        };
+
+        // 啟動初始化
+        initCanvas();
 
         const getPos = (e) => {
           const rect = canvas.getBoundingClientRect();
-          let clientX = e.clientX;
-          let clientY = e.clientY;
-          
+          // 優先處理 Touch 事件的座標 (若瀏覽器觸發原生 Touch)
           if (e.touches && e.touches.length > 0) {
-            clientX = e.touches[0].clientX;
-            clientY = e.touches[0].clientY;
+            return {
+              x: e.touches[0].clientX - rect.left,
+              y: e.touches[0].clientY - rect.top
+            };
           }
-          
+          // 處理 Pointer 或 Mouse 事件的座標
           return {
-            x: clientX - rect.left,
-            y: clientY - rect.top
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
           };
         };
 
@@ -132,23 +146,26 @@
           isDrawing = false;
         };
 
-        // 強制 { passive: false } 解決手機滑動頁面問題
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', stopDrawing);
-        canvas.addEventListener('mouseleave', stopDrawing);
-        
+        // 【修正2】全面改用 Pointer Events，它能無縫接軌手機觸控、滑鼠與觸控筆
+        canvas.addEventListener('pointerdown', startDrawing, { passive: false });
+        canvas.addEventListener('pointermove', draw, { passive: false });
+        canvas.addEventListener('pointerup', stopDrawing, { passive: false });
+        canvas.addEventListener('pointercancel', stopDrawing, { passive: false });
+        canvas.addEventListener('pointerout', stopDrawing, { passive: false });
+
+        // 保留原有的 Touch 事件做為雙重保險（防止部分舊版手機瀏覽器將頁面拖走）
         canvas.addEventListener('touchstart', startDrawing, { passive: false });
         canvas.addEventListener('touchmove', draw, { passive: false });
         canvas.addEventListener('touchend', stopDrawing, { passive: false });
         canvas.addEventListener('touchcancel', stopDrawing, { passive: false });
 
         return () => {
-          canvas.removeEventListener('mousedown', startDrawing);
-          canvas.removeEventListener('mousemove', draw);
-          canvas.removeEventListener('mouseup', stopDrawing);
-          canvas.removeEventListener('mouseleave', stopDrawing);
-          
+          canvas.removeEventListener('pointerdown', startDrawing);
+          canvas.removeEventListener('pointermove', draw);
+          canvas.removeEventListener('pointerup', stopDrawing);
+          canvas.removeEventListener('pointercancel', stopDrawing);
+          canvas.removeEventListener('pointerout', stopDrawing);
+
           canvas.removeEventListener('touchstart', startDrawing);
           canvas.removeEventListener('touchmove', draw);
           canvas.removeEventListener('touchend', stopDrawing);
@@ -160,7 +177,8 @@
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // 修正清除範圍，對齊 offsetWidth
+        ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
       };
 
       const handleSave = () => {
@@ -180,19 +198,18 @@
                    <Icon name="X" size={24} />
                 </button>
              </div>
-             
-             <div className="flex-1 bg-slate-200 relative p-2">
-                {/* 加入 style={{ touchAction: 'none' }} 強制阻擋手機捲動 */}
+
+             <div className="flex-1 bg-slate-200 relative p-2 flex flex-col">
                 <canvas 
                    ref={canvasRef}
-                   style={{ touchAction: 'none' }}
-                   className="w-full h-full bg-white rounded-lg shadow-inner cursor-crosshair touch-none"
+                   style={{ touchAction: 'none' }} 
+                   className="flex-1 w-full bg-white rounded-lg shadow-inner cursor-crosshair touch-none"
                 />
-                <div className="absolute top-4 left-4 text-slate-300 pointer-events-none text-xl font-bold opacity-30 select-none">
+                <div className="absolute top-6 left-6 text-slate-300 pointer-events-none text-xl font-bold opacity-30 select-none">
                    請在此處簽名
                 </div>
              </div>
-             
+
              <div className="p-4 flex gap-3 bg-white border-t">
                 <button 
                   onClick={handleClear}
@@ -214,10 +231,10 @@
 
     function App() {
       const tableRef = useRef(null);
-      
+
       // ★ 強制將您的專屬 Google 試算表網址寫死在系統中
       const MY_GAS_URL = "https://script.google.com/macros/s/AKfycbyjZUFfWcoPBO88YyXPJtsPdxMO7YyivgPtDZZ7R009HroPtup6_lNmOR090dclo8Adsw/exec";
-      
+
       const [appConfig, setAppConfig] = useState(() => {
         try {
           const saved = localStorage.getItem('machineAppConfig');
@@ -230,7 +247,7 @@
           return { mode: 'api', apiUrl: MY_GAS_URL };
         }
       });
-      
+
       const [showSettings, setShowSettings] = useState(false);
       const [tempUrl, setTempUrl] = useState(appConfig.apiUrl);
 
@@ -244,7 +261,7 @@
       const [formData, setFormData] = useState(defaultForm);
       const [signature, setSignature] = useState(null); 
       const [showSignaturePad, setShowSignaturePad] = useState(false); 
-      
+
       const [editingId, setEditingId] = useState(null);
 
       const currentMonthPrefix = getLocalISODate().substring(0, 7);
@@ -315,7 +332,7 @@
           if (!response.ok) {
              throw new Error(`HTTP error! status: ${response.status}`);
           }
-          
+
           const textData = await response.text();
           let responseData;
           try {
@@ -366,11 +383,11 @@
         } else {
           updatedRecords = [...records, recordToSave];
         }
-        
+
         // 樂觀更新：立刻將新資料寫入畫面，讓使用者感覺瞬間完成
         setRecords(updatedRecords);
         saveLocalRecords(updatedRecords); 
-        
+
         setEditingId(null);
         setFormData({ ...defaultForm, date: getLocalISODate() });
         setSignature(null);
@@ -379,7 +396,7 @@
         if (appConfig.mode === 'api' && appConfig.apiUrl) {
            setIsSyncing(true);
            const action = editingId ? 'update' : 'create';
-           
+
            // 背景發送請求，不阻擋 UI
            sendToCloud(action, { record: recordToSave }).then(success => {
                if (success) {
@@ -415,7 +432,7 @@
           // 樂觀刪除
           setRecords(updatedRecords);
           saveLocalRecords(updatedRecords);
-          
+
           if (appConfig.mode === 'api' && appConfig.apiUrl) {
              setIsSyncing(true);
              sendToCloud('delete', { id: id }).then(success => {
@@ -492,7 +509,7 @@
 
       return (
         <div className="min-h-screen p-2 md:p-4 pb-20 relative">
-          
+
           {toastMessage && (
             <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-2xl flex items-center gap-2 transition-all font-bold">
               {isFetching || isSyncing || isGenerating ? <Icon name="Loader2" className="animate-spin" size={20} /> : <Icon name="Save" size={20} />}
@@ -540,7 +557,7 @@
           )}
 
           <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
-            
+
             {/* Header */}
             <header className="bg-white p-4 md:p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
@@ -563,7 +580,7 @@
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex flex-wrap gap-2">
                 {appConfig.mode === 'api' && (
                    <button 
@@ -593,7 +610,7 @@
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-              
+
               {/* Form Sidebar */}
               <div className="lg:col-span-1 bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200 border-t-4 border-t-blue-500 relative">
                 <div className="flex justify-between items-center mb-4">
@@ -607,7 +624,7 @@
                     </button>
                   )}
                 </div>
-                
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">
@@ -687,7 +704,7 @@
                       共 {sortedCurrentMonthRecords.length} 筆
                     </div>
                   </div>
-                  
+
                   <div data-screenshot-scroll="true" className="overflow-x-auto flex-1 p-2 md:p-4 min-h-[300px]">
                     <table className="w-full text-base text-left min-w-[500px]">
                       <thead className="text-slate-500 border-b-2 border-slate-200">
